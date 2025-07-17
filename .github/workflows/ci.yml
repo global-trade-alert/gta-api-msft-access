@@ -1,0 +1,230 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  vba-validation:
+    name: VBA Validation
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Validate VBA File Structure
+      shell: powershell
+      run: |
+        Write-Host "=== VBA Module Validation ==="
+        
+        # Check if VBA files exist
+        $vbaFiles = Get-ChildItem -Path "code" -Filter "*.bas" -Recurse
+        if ($vbaFiles.Count -eq 0) {
+          Write-Error "No VBA files found in code/ directory"
+          exit 1
+        }
+        
+        Write-Host "Found $($vbaFiles.Count) VBA files:"
+        foreach ($file in $vbaFiles) {
+          Write-Host "  - $($file.Name) ($([math]::Round($file.Length/1KB, 1)) KB)"
+        }
+        
+        # Basic VBA syntax validation
+        foreach ($file in $vbaFiles) {
+          Write-Host "`n=== Validating $($file.Name) ==="
+          $content = Get-Content $file.FullName -Raw
+          
+          # Check for basic VBA structure
+          if ($content -notmatch "(?i)^(Attribute|Option|Public|Private|Function|Sub)") {
+            Write-Error "File $($file.Name) doesn't appear to be a valid VBA module"
+            exit 1
+          }
+          
+          # Check for common syntax issues
+          $issues = @()
+          
+          # Unmatched parentheses/brackets
+          $openParens = ($content -split '\(' | Measure-Object).Count - 1
+          $closeParens = ($content -split '\)' | Measure-Object).Count - 1
+          if ($openParens -ne $closeParens) {
+            $issues += "Unmatched parentheses: $openParens open, $closeParens close"
+          }
+          
+          # Check for proper End statements
+          $subCount = ($content | Select-String "(?i)^\s*(Public|Private)?\s*Sub\s+" | Measure-Object).Count
+          $endSubCount = ($content | Select-String "(?i)^\s*End\s+Sub" | Measure-Object).Count
+          $functionCount = ($content | Select-String "(?i)^\s*(Public|Private)?\s*Function\s+" | Measure-Object).Count
+          $endFunctionCount = ($content | Select-String "(?i)^\s*End\s+Function" | Measure-Object).Count
+          
+          if ($subCount -ne $endSubCount) {
+            $issues += "Unmatched Sub/End Sub: $subCount subs, $endSubCount ends"
+          }
+          if ($functionCount -ne $endFunctionCount) {
+            $issues += "Unmatched Function/End Function: $functionCount functions, $endFunctionCount ends"
+          }
+          
+          # Report issues
+          if ($issues.Count -gt 0) {
+            Write-Warning "Issues found in $($file.Name):"
+            foreach ($issue in $issues) {
+              Write-Warning "  - $issue"
+            }
+          } else {
+            Write-Host "✅ $($file.Name) passed basic syntax validation"
+          }
+        }
+
+  spell-check:
+    name: Documentation Spell Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install aspell
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y aspell aspell-en
+    
+    - name: Create custom dictionary
+      run: |
+        cat > .aspell.en.pws << 'EOF'
+        personal_ws-1.1 en 100
+        SGEPT
+        GTA
+        API
+        VBA
+        MAST
+        JSON
+        PowerShell
+        accdb
+        SqlServer
+        JsonConverter
+        modGtaSync
+        tblSettings
+        tblGTAInterventions
+        tblSyncLog
+        APIKey
+        OAuth
+        GitHub
+        localhost
+        OLE
+        DAO
+        ADO
+        ActiveX
+        HS6
+        CPC3
+        UML
+        REST
+        HTTP
+        HTTPS
+        SQL
+        XML
+        CSV
+        UTF
+        workflow
+        workflows
+        MERCHANTABILITY
+        sublicense
+        MERCHANTABILITY
+        NONINFRINGEMENT
+        EOF
+    
+    - name: Spell check documentation
+      run: |
+        echo "=== Spell Checking Documentation ==="
+        find docs/ samples/ scripts/ -name "*.md" -type f | while read file; do
+          echo "Checking $file..."
+          # Remove code blocks and URLs before spell checking
+          sed '/```/,/```/d' "$file" | \
+          sed 's/http[s]*:\/\/[^ ]* //g' | \
+          sed 's/`[^`]*`//g' | \
+          aspell --personal=./.aspell.en.pws --lang=en --encoding=utf-8 list | \
+          sort -u > /tmp/misspelled_$$.txt
+          
+          if [ -s /tmp/misspelled_$$.txt ]; then
+            echo "❌ Potential misspellings in $file:"
+            cat /tmp/misspelled_$$.txt | head -20
+            if [ $(wc -l < /tmp/misspelled_$$.txt) -gt 20 ]; then
+              echo "... and $(($(wc -l < /tmp/misspelled_$$.txt) - 20)) more"
+            fi
+            echo ""
+          else
+            echo "✅ No misspellings found in $file"
+          fi
+          rm -f /tmp/misspelled_$$.txt
+        done
+
+  documentation-validation:
+    name: Documentation Structure
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Validate README structure
+      run: |
+        echo "=== Documentation Structure Validation ==="
+        
+        # Check required files exist
+        required_files=(
+          "docs/README.md"
+          "samples/GtaDemo_TableSchemas.sql"
+          "samples/GtaDemo_SampleQueries.sql"
+          "code/modGtaSync.bas"
+          "code/JsonConverter.bas"
+          "scripts/ImportModules.ps1"
+          "LICENSE"
+          "CHANGELOG.md"
+        )
+        
+        missing_files=()
+        for file in "${required_files[@]}"; do
+          if [ ! -f "$file" ]; then
+            missing_files+=("$file")
+          else
+            echo "✅ Found $file"
+          fi
+        done
+        
+        if [ ${#missing_files[@]} -gt 0 ]; then
+          echo "❌ Missing required files:"
+          printf '  - %s\n' "${missing_files[@]}"
+          exit 1
+        fi
+        
+        # Validate README has required sections
+        echo -e "\n=== README Section Validation ==="
+        required_sections=(
+          "# SGEPT API Integration"
+          "## Quick Start"
+          "## Prerequisites"
+          "## Installation"
+          "## Configuration"
+          "## Usage"
+          "## Architecture"
+          "## API Reference"
+          "## Database Schema"
+          "## Troubleshooting"
+          "## Contributing"
+          "## License"
+        )
+        
+        missing_sections=()
+        for section in "${required_sections[@]}"; do
+          if ! grep -q "^$section" docs/README.md; then
+            missing_sections+=("$section")
+          else
+            echo "✅ Found section: $section"
+          fi
+        done
+        
+        if [ ${#missing_sections[@]} -gt 0 ]; then
+          echo "❌ Missing README sections:"
+          printf '  - %s\n' "${missing_sections[@]}"
+          exit 1
+        fi
+        
+        echo -e "\n✅ All documentation requirements met!" 
