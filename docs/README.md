@@ -34,7 +34,7 @@ When setup is complete, you'll have:
 
 - **Microsoft Access 2016 or later** (part of Microsoft Office Professional)
 - **Internet connection** for API access
-- **SGEPT API key** ([request here](https://www.globaltradealert.org/api))
+- **SGEPT API key** ([request here](https://globaltradealert.org/api-access))
 - **Windows computer** with administrative rights to install VBA references
 - **Basic familiarity with Access** (opening databases, running queries)
 
@@ -43,7 +43,7 @@ When setup is complete, you'll have:
 **Demo API Key** (Free)
 - Basic intervention data (title, type, dates, jurisdictions, product codes)
 - Perfect for testing and evaluation
-- Request at: [SGEPT API Registration](https://www.globaltradealert.org/api)
+- Request at: [SGEPT API Registration](https://globaltradealert.org/api-access)
 
 **Full API Key** (Available upon request)
 - All demo features PLUS detailed descriptions and source URLs
@@ -133,7 +133,7 @@ cd scripts
 
 ### Step 6: Get Your API Key
 
-1. **Visit**: [SGEPT API Registration](https://www.globaltradealert.org/api)
+1. **Visit**: [SGEPT API Registration](https://globaltradealert.org/api-access)
 2. **Register**: Provide your organization details
 3. **Request Demo Access**: Start with demo key for testing
 4. **Save Your Key**: You'll receive it via email
